@@ -1,16 +1,31 @@
 import { test } from '../../_fixtures/fixtures';
 import { InternalViewArticlePage } from '../../../src/ui/pages/article/view/InternalViewArticlePage';
-import { signUpUser } from '../../../src/ui/actions/auth/signUpUser';
+import { generateStorageStateForAuth } from '../../../src/common/helpers/generateStorageStateForAuth';
 
-test.use({ contextsNumber: 1, usersNumber: 2 });
+let viewerPage;
+
+test.use({ usersNumber: 2 });
 
 test.beforeEach(
-  async ({ pages, users, articleWithoutTags, usersApi, articlesApi }) => {
-    const registerResponse = await usersApi.registerNewUser(users[0]);
-    await usersApi.assertSuccessResponseCode(registerResponse);
-    users[0].token = await usersApi.parseTokenFromBody(registerResponse);
+  async ({
+    browser,
+    pages,
+    users,
+    articleWithoutTags,
+    usersApi,
+    articlesApi,
+  }) => {
+    const authorResponse = await usersApi.registerNewUser(users[0]);
+    await usersApi.assertSuccessResponseCode(authorResponse);
+    users[0].token = await usersApi.parseTokenFromBody(authorResponse);
 
-    await signUpUser(pages[0], users[1], 1);
+    const viewerResponse = await usersApi.registerNewUser(users[1]);
+    await usersApi.assertSuccessResponseCode(viewerResponse);
+    users[1].token = await usersApi.parseTokenFromBody(viewerResponse);
+
+    const storageState = generateStorageStateForAuth(users[1]);
+    const context = await browser.newContext(storageState);
+    viewerPage = await context.newPage();
 
     const createResponse = await articlesApi.createArticle(
       {
@@ -31,10 +46,9 @@ test.beforeEach(
 
 test('View an article created by another registered user', async ({
   articleWithoutTags,
-  pages,
   users,
 }) => {
-  const page = new InternalViewArticlePage(pages[0], 1);
+  const page = new InternalViewArticlePage(viewerPage, 1);
 
   await page.open(articleWithoutTags.url);
   await page.articleHeader.assertTitleIsVisible(articleWithoutTags.title);
